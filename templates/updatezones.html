@@ -1,0 +1,145 @@
+<!--updatezones-->
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Update Zones</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-gray-50 h-screen flex items-center justify-center">
+
+  <div class="w-[28rem] bg-white p-6 rounded-xl shadow-lg">
+    <h2 class="text-lg font-semibold mb-4">Defined Zones</h2>
+
+    <!-- Zones List -->
+    <div id="zonesList" class="space-y-3">
+      <p class="text-gray-400 italic">No zones created yet</p>
+    </div>
+  </div>
+
+  <!-- Rename Modal -->
+  <div id="renameModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+    <div class="bg-white rounded-xl p-6 w-80 shadow-lg">
+      <h3 class="text-lg font-semibold mb-3">Rename Zone</h3>
+      <input type="text" id="renameInput" class="w-full px-3 py-2 border rounded-lg mb-4 focus:ring focus:border-blue-400">
+      <div class="flex justify-end gap-3">
+        <button id="cancelRenameBtn" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400">Cancel</button>
+        <button id="saveRenameBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Save</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ---- Update Zones Script ----
+const zonesList = document.getElementById('zonesList');
+let savedZones = [];
+let renameIndex = null; // Track which zone is being renamed
+
+// Load zones from backend
+async function loadZones() {
+  const res = await fetch('/zones/list');
+  const data = await res.json();
+  if (data.status === 'success') { 
+    savedZones = data.zones; 
+    renderZonesList(); 
+  }
+}
+
+// Render zones list
+function renderZonesList() {
+  zonesList.innerHTML = '';
+  if (!savedZones.length) {
+    zonesList.innerHTML = '<p class="text-gray-400 italic">No zones created yet</p>';
+    return;
+  }
+
+  savedZones.forEach((z, i) => {
+    const div = document.createElement("div");
+    div.className = "p-3 border rounded-lg bg-gray-50 flex justify-between items-center";
+
+    div.innerHTML = `
+      <span class="font-medium" id="zoneName-${i}">${z.name}</span>
+      <div class="flex items-center gap-4">
+        <button onclick="openRenameModal(${i})" class="text-blue-600 hover:text-blue-800">
+          <i class="fa-solid fa-pen"></i>
+        </button>
+        <button onclick="deleteZone(${i})" class="text-red-700 hover:text-red-900">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    `;
+    zonesList.appendChild(div);
+  });
+
+  // Append "Clear All Zones" button after last zone
+  const clearBtn = document.createElement("button");
+  clearBtn.className = "w-full mt-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600";
+  clearBtn.innerHTML = `<i class="fas fa-trash-alt mr-2"></i> Clear All Zones`;
+  clearBtn.addEventListener('click', clearAllZones);
+  zonesList.appendChild(clearBtn);
+}
+
+// Open rename modal
+function openRenameModal(index) {
+  renameIndex = index;
+  const renameModal = document.getElementById('renameModal');
+  const renameInput = document.getElementById('renameInput');
+  renameInput.value = savedZones[index].name;
+  renameModal.classList.remove('hidden');
+  renameInput.focus();
+}
+
+// Cancel rename
+document.getElementById('cancelRenameBtn').addEventListener('click', () => {
+  document.getElementById('renameModal').classList.add('hidden');
+  renameIndex = null;
+});
+
+// Save renamed zone
+document.getElementById('saveRenameBtn').addEventListener('click', async () => {
+  const newName = document.getElementById('renameInput').value.trim();
+  if (renameIndex !== null && newName) {
+    savedZones[renameIndex].name = newName;
+    // Save updated zones to backend
+    await fetch('/zones/clear', { method: 'POST' }); // clear backend first
+    for (const z of savedZones) {
+      await fetch('/zones/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(z)
+      });
+    }
+    loadZones();
+    document.getElementById('renameModal').classList.add('hidden');
+    renameIndex = null;
+  }
+});
+
+// Delete a single zone
+async function deleteZone(index) {
+  savedZones.splice(index, 1);
+  await fetch('/zones/clear', { method: 'POST' });
+  for (const z of savedZones) {
+    await fetch('/zones/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(z)
+    });
+  }
+  loadZones();
+}
+
+// Clear all zones
+async function clearAllZones() {
+  await fetch('/zones/clear', { method: 'POST' });
+  savedZones = [];
+  renderZonesList();
+}
+
+// Initial load
+loadZones();
+</script>
+</body>
+</html>

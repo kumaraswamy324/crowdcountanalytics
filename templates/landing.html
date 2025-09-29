@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CrowdFlow Analytics</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='landing.css') }}">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="logo">CrowdCountAnalytics</div>
+    <div class="nav-right">
+      <a href="{{ url_for('auth.login')}}"><button class="nav-btn">Login</button></a>
+      <a href="{{ url_for('auth.register')}}"><button class="nav-btn">Register</button></a>
+    </div>
+  </nav>
+
+
+  <!-- Hero Section -->
+<section class="hero">
+  <div class="hero-text">
+    <h1>Intelligent Crowd Analysis at Your Fingertips</h1>
+    <p>
+      Leverage advanced video analytics to accurately detect, count, and analyze
+      crowd movements in real-time, gaining actionable insights for enhanced safety
+      and efficiency.
+    </p>
+    <button class="primary-btn" onclick="window.location.href='{{ url_for('auth.register')}}'">
+      Get Started
+    </button>
+  </div>
+</section>
+
+
+  <!-- Core Capabilities -->
+  <section class="capabilities">
+    <h2>Core Capabilities</h2>
+    <div class="capability-grid">
+      <div class="card"><i class="fa-solid fa-video"></i><h3>Real-time Monitoring</h3><p>Watch live video feeds with instant crowd detection and analysis overlays.</p></div>
+      <div class="card"><i class="fa-solid fa-user-group"></i><h3>Accurate People Counting</h3><p>Utilize AI-powered algorithms for precise and reliable crowd counting in defined zones.</p></div>
+      <div class="card"><i class="fa-solid fa-chart-line"></i><h3>Insightful Reporting</h3><p>Generate comprehensive reports with historical data, trends, and actionable metrics.</p></div>
+      <div class="card"><i class="fa-solid fa-map"></i><h3>Zone Management</h3><p>Define and manage specific areas of interest for granular analysis and alerts.</p></div>
+      <div class="card"><i class="fa-solid fa-bell"></i><h3>Anomaly Detection</h3><p>Receive instant alerts for unusual crowd behavior or breaches in defined thresholds.</p></div>
+      <div class="card"><i class="fa-solid fa-lightbulb"></i><h3>Actionable Insights</h3><p>Transform raw data into strategic decisions to optimize operations and safety.</p></div>
+    </div>
+  </section>
+
+  <!-- Testimonials -->
+  <section class="testimonials">
+    <h2>What Our Clients Say</h2>
+    <div class="testimonials-grid">
+      <div class="testimonial">“CrowdFlow Analytics has revolutionized our event management. The real-time data allows us to deploy resources effectively and maintain a safe environment.” <br><span>- Jane Doe, Tech Innovations Inc.</span></div>
+      <div class="testimonial">“The accuracy of the counting and the intuitive zone management tools are unparalleled. It’s an indispensable tool for urban planning and security.” <br><span>- John Smith, Urban Security Solutions</span></div>
+      <div class="testimonial">“We’ve significantly reduced wait times and improved visitor flow thanks to the insights from CrowdFlow. Highly recommended!” <br><span>- Alice Johnson, Event Horizon Management</span></div>
+      <div class="testimonial">“The system provides crucial data for optimizing public transport hubs, ensuring efficient and safe movement of passengers during peak hours.” <br><span>- Robert Brown, Metro Transit Authority</span></div>
+    </div>
+  </section>
+
+  <!-- Call To Action -->
+<section class="cta">
+  <h2>Ready to Transform Your Crowd Management?</h2>
+  <button class="primary-btn" onclick="window.location.href='{{ url_for('auth.register')}}'">
+    Start Your Analysis Today
+  </button>
+</section>
+
+
+  
+</body>
+</html>

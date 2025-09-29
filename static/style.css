@@ -1,0 +1,147 @@
+/* ===== Reset & Base ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html, body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background-color: #f9fafb;
+  color: #111827;
+}
+
+/* Center the card on both pages */
+body.login-page,
+body.register-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 24px;            /* keeps a little breathing room on small screens */
+}
+
+/* ===== Card ===== */
+.form-container {
+  width: 100%;
+  max-width: 460px;         /* consistent width like your mock */
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+  padding: 28px 24px;
+}
+
+/* Headings */
+.form-container h2 {
+  margin: 0 0 6px 0;
+  font-size: 24px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.form-container .subtitle {
+  margin: 0 0 22px 0;
+  font-size: 14px;
+  color: #6b7280;
+  text-align: center;
+}
+
+/* ===== Form Layout ===== */
+.form-container form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;                /* even vertical rhythm for all fields */
+}
+
+/* Inputs */
+.form-container input {
+  width: 100%;
+  height: 44px;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  outline: none;
+  background: #fff;
+}
+
+.form-container input:focus {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37,99,235,0.15);
+}
+
+/* Forgot Password row (login page) */
+.options {
+  width: 100%;              /* make the row span full card width */
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: -4px;         /* pulls it a touch closer to the password field */
+  margin-bottom: 8px;       /* gives space before the button */
+  font-size: 13px;
+}
+
+.options a {
+  color: #2563eb;
+  text-decoration: none;
+}
+.options a:hover { text-decoration: underline; }
+
+/* Button */
+.form-container button {
+  height: 44px;
+  width: 100%;
+  border: 0;
+  border-radius: 8px;
+  background: #2563eb;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.form-container button:hover {
+  background: #1d4ed8;
+}
+
+/* Under-form link (Register/Login) */
+.register-text {
+  margin-top: 14px;
+  text-align: center;
+  font-size: 14px;
+}
+.register-text a {
+  color: #2563eb;
+  text-decoration: none;
+  font-weight: 500;
+}
+.register-text a:hover { text-decoration: underline; }
+
+/* Flash messages */
+.flash-messages { margin-bottom: 12px; }
+
+.flash {
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.flash.error   { background: #fee2e2; color: #b91c1c; }
+.flash.success { background: #dcfce7; color: #15803d; }
+
+/* Small screens */
+@media (max-width: 420px) {
+  .form-container {
+    padding: 24px 16px;
+    max-width: 100%;
+  }
+}
+
+
+

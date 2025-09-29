@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Preview Zones</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #videoContainer {
+      position: relative;
+      width: 850px;
+      height: 625px;
+      background-color: #040404;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #video, #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+
+<div class="flex gap-6 h-full justify-center">
+  <div id="videoContainer">
+    <span id="noVideoText" style="color: #555; font-size: 16px; position: absolute; z-index: 1;">
+      No video or camera selected
+    </span>
+    <video id="video" muted autoplay crossorigin="anonymous"></video>
+    <canvas id="overlay"></canvas>
+  </div>
+</div>
+
+<!-- Toast container -->
+<div id="toastContainer" class="fixed top-20 right-6 space-y-2 z-50"></div>
+
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
+  const noVideoText = document.getElementById('noVideoText');
+  let savedZones = [];
+  let videoLoaded = false;
+  let currentStream = null;
+
+  function adjustCanvasSize() {
+    const rect = video.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    redraw();
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    noVideoText.style.display = 'none';
+    video.style.display = 'block';
+    videoLoaded = true;
+    adjustCanvasSize();
+    loadZones();
+  });
+
+  window.addEventListener('resize', adjustCanvasSize);
+
+  async function loadZones() {
+    try {
+      const res = await fetch('/zones/list');
+      const data = await res.json();
+      if (data.status === 'success') {
+        savedZones = data.zones;
+        redraw();
+      }
+    } catch (e) {
+      console.error('Failed to load zones', e);
+    }
+  }
+
+  function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    if (!videoLoaded) return;
+    for (const z of savedZones) {
+      ctx.strokeStyle = 'blue';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
+      ctx.fillStyle = 'rgba(0,0,255,0.1)';
+      ctx.fillRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
+
+      ctx.font = "12px sans-serif";
+      ctx.textBaseline = "middle";
+      const text = z.name;
+      const paddingX = 6;
+      const textWidth = ctx.measureText(text).width;
+      const rectW = textWidth + paddingX * 2;
+      const rectH = 18;
+      const labelX = z.x1 + 4;
+      const labelY = z.y1 + 4;
+
+      ctx.fillStyle = "rgba(22,163,74,0.9)";
+      ctx.beginPath();
+      ctx.roundRect(labelX, labelY, rectW, rectH, 10);
+      ctx.fill();
+
+      ctx.fillStyle = "white";
+      ctx.fillText(text, labelX + paddingX, labelY + rectH / 2);
+    }
+  }
+
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+
+  function stopCameraStream() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+  }
+
+  // Load video or camera on startup
+  window.addEventListener('DOMContentLoaded', async () => {
+    const lastVideo = localStorage.getItem('lastVideoUrl');
+    const cameraActive = localStorage.getItem('cameraActive');
+
+    if (lastVideo) {
+      stopCameraStream();
+      video.srcObject = null;
+      video.src = lastVideo;
+      video.style.display = 'block';
+      noVideoText.style.display = 'none';
+    } else if (cameraActive === 'true') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        currentStream = stream;
+        video.srcObject = stream;
+        video.removeAttribute('src');
+        video.play();
+        noVideoText.style.display = 'none';
+        video.style.display = 'block';
+        video.onloadedmetadata = () => {
+          adjustCanvasSize();
+          redraw();
+        };
+      } catch (err) {
+        console.error("Camera restore failed:", err);
+        localStorage.removeItem('cameraActive');
+        noVideoText.style.display = 'block';
+        video.style.display = 'none';
+      }
+    } else {
+      noVideoText.style.display = 'block';
+      video.style.display = 'none';
+    }
+  });
+</script>
+
+</body>
+</html>

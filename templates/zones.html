@@ -1,0 +1,55 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zone Editor</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body class="bg-gray-50">
+
+  <!-- Navbar -->
+  {% include 'navbar.html' %}
+
+  <div class="flex h-screen">
+    <div class="flex h-screen">
+  <!-- Sidebar -->
+  <div class="w-60 bg-white shadow h-full p-5 flex flex-col gap-4">
+
+    <!-- Heading -->
+    <h1 class="text-blue-600 font-semibold text-lg mb-2">Zone Manipulation Tools</h1>
+
+    <a href="{{ url_for('zones', tab='draw') }}"
+       class="py-3 px-4 rounded-lg {% if tab=='draw' %}bg-blue-600 text-white{% else %}bg-gray-200 hover:bg-gray-300{% endif %}">
+      <i class="fas fa-pencil-ruler mr-2"></i> Draw Zones
+    </a>
+
+    <a href="{{ url_for('zones', tab='preview') }}"
+       class="py-3 px-4 rounded-lg {% if tab=='preview' %}bg-blue-600 text-white{% else %}bg-gray-200 hover:bg-gray-300{% endif %}">
+      <i class="fas fa-eye mr-2"></i> Preview Zones
+    </a>
+
+    <a href="{{ url_for('zones', tab='update') }}"
+       class="py-3 px-4 rounded-lg {% if tab=='update' %}bg-blue-600 text-white{% else %}bg-gray-200 hover:bg-gray-300{% endif %}">
+      <i class="fas fa-edit mr-2"></i> Update Zones
+    </a>
+  </div>
+</div>
+
+
+    <!-- Main Content -->
+    <div class="flex-1 p-6 overflow-hidden">
+      {% if tab == 'draw' %}
+        {% include 'drawzones.html' %}
+      {% elif tab == 'preview' %}
+        {% include 'previewzones.html' %}
+      {% elif tab == 'update' %}
+        {% include 'updatezones.html' %}
+      {% endif %}
+    </div>
+  </div>
+
+</body>
+</html>

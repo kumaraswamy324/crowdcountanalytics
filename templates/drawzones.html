@@ -1,0 +1,396 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Zone Manipulation</title>
+  <script src="https://kit.fontawesome.com/a2d9d5a52f.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    #videoContainer {
+      position: relative;
+      width: 850px;
+      height: 625px;
+      background-color: #040404;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+    }
+    #video, #overlay {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+    }
+    #overlay {
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-100 p-6">
+
+<div class="flex gap-6 h-full">
+  <!-- Video Container -->
+  <div id="videoContainer">
+    <span id="noVideoText" style="color: #555; font-size: 16px; position: absolute; z-index: 1;">
+      No video or camera selected
+    </span>
+    <video id="video" controls autoplay muted crossorigin="anonymous" class="rounded-xl"></video>
+    <canvas id="overlay" width="850" height="625"></canvas>
+  </div>
+
+  <!-- Sidebar -->
+  <div class="w-96 flex flex-col gap-4">
+    <!-- Zone Management Section -->
+    <div class="bg-white p-5 rounded-xl shadow mb-4">
+      <h2 class="text-lg font-semibold mb-3">Zone Management Tools</h2>
+      <button id="createZoneBtn" class="w-full py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        <i class="fas fa-vector-square mr-2"></i> Create New Zone
+      </button>
+    </div>
+
+    <!-- Cameras Section -->
+    <div class="bg-white p-5 rounded-xl shadow">
+      <h2 class="text-lg font-semibold mb-3">Cameras</h2>
+      <div class="flex flex-col gap-2">
+        <button id="camera1Btn" class="w-full py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Camera 1</button>
+        <button id="camera2Btn" class="w-full py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Camera 2</button>
+        <button id="camera3Btn" class="w-full py-2 bg-gray-100 rounded-lg hover:bg-gray-200">Camera 3</button>
+      </div>
+
+      <h3 class="text-sm font-medium mt-4 mb-2 text-gray-700">Choose a Video</h3>
+      <button id="uploadVideoBtn" class="w-full py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+        Upload Video
+      </button>
+      <button id="deleteVideoBtn" class="w-full mt-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700">
+        Delete Video / Camera
+      </button>
+      <input type="file" id="videoFileInput" accept="video/*" class="hidden" />
+    </div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="zoneModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+  <div class="bg-white rounded-lg p-6 w-96 shadow-xl">
+    <h2 class="text-lg font-semibold mb-4">Name Your Zone</h2>
+    <input type="text" id="zoneNameInput" placeholder="Enter zone name"
+           class="w-full px-3 py-2 border rounded-lg mb-4 focus:ring focus:border-blue-400" />
+    <div class="flex justify-end gap-3">
+      <button id="cancelZoneBtn" class="px-4 py-2 bg-gray-300 rounded-lg hover:bg-gray-400">Cancel</button>
+      <button id="saveZoneBtn" class="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast Notifications -->
+<div id="toastContainer" class="fixed top-20 left-1/2 transform -translate-x-1/2 space-y-2 z-50"></div>
+
+<script>
+  const video = document.getElementById('video');
+  const canvas = document.getElementById('overlay');
+  const ctx = canvas.getContext('2d');
+  const noVideoText = document.getElementById('noVideoText');
+
+  const createZoneBtn = document.getElementById('createZoneBtn');
+  const zoneModal = document.getElementById('zoneModal');
+  const zoneNameInput = document.getElementById('zoneNameInput');
+  const saveZoneBtn = document.getElementById('saveZoneBtn');
+  const cancelZoneBtn = document.getElementById('cancelZoneBtn');
+  const toastContainer = document.getElementById('toastContainer');
+
+  const uploadVideoBtn = document.getElementById('uploadVideoBtn');
+  const deleteVideoBtn = document.getElementById('deleteVideoBtn');
+  const videoFileInput = document.getElementById('videoFileInput');
+
+  const camera1Btn = document.getElementById('camera1Btn');
+
+  let drawingEnabled = false, drawing = false;
+  let startX=0, startY=0, currentRect=null;
+  let savedZones = [];
+  let currentStream = null;
+
+  // Resize canvas to match video CSS size
+  function adjustCanvasSize() {
+    const rect = video.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    redraw();
+  }
+
+  video.addEventListener('loadedmetadata', () => {
+    noVideoText.style.display = 'none';
+    video.style.display = 'block';
+    adjustCanvasSize();
+    loadZones();
+  });
+
+  window.addEventListener('resize', () => {
+    adjustCanvasSize();
+  });
+
+  // Upload/select video
+  uploadVideoBtn.addEventListener('click', () => {
+    stopCameraStream();
+    videoFileInput.click();
+  });
+
+  videoFileInput.addEventListener('change', async () => {
+    const file = videoFileInput.files[0];
+    if (file) {
+      stopCameraStream();
+      const formData = new FormData();
+      formData.append('video', file);
+
+      try {
+        const res = await fetch('/upload_video', { method: 'POST', body: formData });
+        const data = await res.json();
+
+        if (data.status === 'success') {
+          video.srcObject = null;
+          video.src = data.url;
+          video.load();
+          video.play();
+          localStorage.setItem('lastVideoUrl', data.url);
+          localStorage.removeItem('cameraActive');
+          noVideoText.style.display = 'none';
+          video.style.display = 'block';
+
+          savedZones = []; // Clear zones on new video
+          redraw();
+        } else {
+          alert('Upload failed: ' + data.message);
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Error uploading video');
+      }
+    }
+  });
+
+  // Delete video
+  deleteVideoBtn.addEventListener('click', () => {
+    stopCameraStream();
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+    localStorage.removeItem('lastVideoUrl');
+    localStorage.removeItem('cameraActive'); 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    noVideoText.style.display = 'block';
+    video.style.display = 'none';
+    showToast("Video Deleted. Please upload a new one.");
+  });
+
+  // Restore video or camera on refresh
+  window.addEventListener('DOMContentLoaded', async () => {
+    const lastVideo = localStorage.getItem('lastVideoUrl');
+    const cameraActive = localStorage.getItem('cameraActive');
+
+    if (lastVideo) {
+      video.src = lastVideo;
+      video.style.display = 'block';
+      noVideoText.style.display = 'none';
+    } else if (cameraActive === 'true') {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        currentStream = stream;
+        video.srcObject = stream;
+        video.removeAttribute('src');
+        video.play();
+        noVideoText.style.display = 'none';
+        video.style.display = 'block';
+
+        video.onloadedmetadata = () => {
+          adjustCanvasSize();
+          redraw();
+        };
+      } catch (err) {
+        console.error("Camera restore failed:", err);
+        localStorage.removeItem('cameraActive');
+      }
+    } else {
+      noVideoText.style.display = 'block';
+      video.style.display = 'none';
+    }
+  });
+
+  // Camera 1 Button
+  camera1Btn.addEventListener('click', async () => {
+    try {
+      stopCameraStream();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+      currentStream = stream;
+      video.srcObject = stream;
+      video.removeAttribute('src');
+      video.play();
+      noVideoText.style.display = 'none';
+      video.style.display = 'block';
+
+      localStorage.setItem('cameraActive', 'true');
+      video.onloadedmetadata = () => {
+        adjustCanvasSize();
+        redraw();
+      };
+      showToast("Camera 1 Activated");
+    } catch (err) {
+      console.error(err);
+      alert("Unable to access camera: " + err.message);
+    }
+  });
+
+  function stopCameraStream() {
+    if (currentStream) {
+      currentStream.getTracks().forEach(track => track.stop());
+      currentStream = null;
+    }
+  }
+
+  // Toast message
+  function showToast(message) {
+    const toast = document.createElement("div");
+    toast.className = "px-4 py-2 rounded-lg shadow text-white bg-green-600 transition-all duration-500";
+    toast.innerText = message;
+    toastContainer.appendChild(toast);
+    setTimeout(() => {
+      toast.classList.add("opacity-0");
+      setTimeout(() => toast.remove(), 500);
+    }, 1500);
+  }
+
+  // Enable drawing
+  createZoneBtn.addEventListener('click', () => {
+    drawingEnabled = true;
+    canvas.style.cursor = 'crosshair';
+    canvas.style.pointerEvents = 'auto';
+    showToast("Drawing Activated");
+  });
+
+  // Mouse events for drawing (with scaling and clamping)
+  canvas.addEventListener('mousedown', (e) => {
+    if (!drawingEnabled) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    startX = Math.round((e.clientX - rect.left) * scaleX);
+    startY = Math.round((e.clientY - rect.top) * scaleY);
+    drawing = true;
+  });
+
+  canvas.addEventListener('mousemove', (e) => {
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    let mx = Math.round((e.clientX - rect.left) * scaleX);
+    let my = Math.round((e.clientY - rect.top) * scaleY);
+    mx = Math.min(Math.max(0, mx), canvas.width);
+    my = Math.min(Math.max(0, my), canvas.height);
+    currentRect = { x1: startX, y1: startY, x2: mx, y2: my };
+    redraw();
+  });
+
+  canvas.addEventListener('mouseup', () => {
+    if (!drawing) return;
+    drawing = false;
+    drawingEnabled = false;
+    canvas.style.cursor = 'default';
+    canvas.style.pointerEvents = 'none';
+    if (currentRect) openModal();
+  });
+
+  // Modal handling
+  function openModal() {
+    zoneNameInput.value = "";
+    zoneModal.classList.remove("hidden");
+    zoneNameInput.focus();
+  }
+
+  function closeModal() {
+    zoneModal.classList.add("hidden");
+    currentRect = null;
+    redraw();
+  }
+  cancelZoneBtn.addEventListener('click', closeModal);
+
+  // Save zone
+  saveZoneBtn.addEventListener('click', async () => {
+    const name = zoneNameInput.value.trim() || `Zone ${savedZones.length + 1}`;
+    const { x1, y1, x2, y2 } = currentRect;
+    const payload = { name, x1, y1, x2, y2 };
+    const res = await fetch('/zones/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (data.status === 'success') {
+      savedZones = data.zones;
+      redraw();
+      showToast("Zone Created");
+    }
+    closeModal();
+  });
+
+  // Redraw zones on canvas
+  function redraw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (const z of savedZones) {
+      ctx.strokeStyle = 'blue';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
+      ctx.fillStyle = 'rgba(0,0,255,0.1)';
+      ctx.fillRect(z.x1, z.y1, z.x2 - z.x1, z.y2 - z.y1);
+      ctx.font = "12px sans-serif";
+      ctx.textBaseline = "middle";
+      const text = z.name;
+      const paddingX = 6;
+      const textWidth = ctx.measureText(text).width;
+      const rectW = textWidth + paddingX * 2;
+      const rectH = 18;
+      const labelX = z.x1 + 4;
+      const labelY = z.y1 + 4;
+      ctx.fillStyle = "rgba(22,163,74,0.9)";
+      ctx.beginPath();
+      ctx.roundRect(labelX, labelY, rectW, rectH, 10);
+      ctx.fill();
+      ctx.fillStyle = "white";
+      ctx.fillText(text, labelX + paddingX, labelY + rectH / 2);
+    }
+    if (currentRect) {
+      ctx.strokeStyle = 'green';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(currentRect.x1, currentRect.y1, currentRect.x2 - currentRect.x1, currentRect.y2 - currentRect.y1);
+    }
+  }
+
+  // Rounded rect helper
+  CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2;
+    if (h < 2 * r) r = h / 2;
+    this.beginPath();
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+  };
+
+  // Load zones from backend
+  async function loadZones() {
+    const res = await fetch('/zones/list');
+    const data = await res.json();
+    if (data.status === 'success') {
+      savedZones = data.zones;
+      redraw();
+    }
+  }
+</script>
+</body>
+</html>

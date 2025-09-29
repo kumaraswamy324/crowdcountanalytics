@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Zone Counts</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+
+  <!-- Navbar -->
+  {% include 'navbar.html' %}
+
+
+  <!-- Content -->
+  <div class="flex items-start justify-center mt-10 gap-6">
+
+
+    <!-- Graph -->
+    <div class="bg-white p-6 rounded-xl shadow w-[650px]">
+      <h3 class="text-lg font-semibold mb-4">Zone Trends</h3>
+      <canvas id="zoneChart" height="250"></canvas>
+    </div>
+
+
+    <!-- Counts + Heatmap -->
+    <div class="bg-white p-6 rounded-xl shadow w-96">
+      <h3 class="text-lg font-semibold mb-4">Zone Occupancy</h3>
+      <div id="countsList" class="space-y-3 text-sm text-gray-700">
+        <p class="text-gray-400 italic">Loading counts...</p>
+      </div>
+
+
+      <!-- Activity Heatmap -->
+      <div class="mt-6 border-t pt-4 text-sm text-gray-700">
+        <h4 class="font-semibold mb-2">Activity Heatmap</h4>
+        <canvas id="activityHeatmap" height="250"></canvas>
+
+
+        <!-- Alert Banner -->
+        <div id="heatmapAlert" class="hidden mt-3 px-3 py-2 rounded-lg text-sm font-medium bg-red-100 text-red-600 border border-red-300">
+          ⚠ High crowding detected in one or more zones!
+        </div>
+      </div>
+    </div>
+
+
+  </div>
+
+
+  <script>
+    // Setup Line Chart
+    const ctx = document.getElementById('zoneChart').getContext('2d');
+    const zoneChart = new Chart(ctx, {
+      type: 'line',
+      data: { labels: [], datasets: [] },
+      options: {
+        responsive: true,
+        animation: false,
+        scales: {
+          x: { title: { display: true, text: 'Time' } },
+          y: { beginAtZero: true }
+        }
+      }
+    });
+
+
+    // Colors for line chart zones
+    const colorPalette = ["red", "blue", "green", "orange", "purple", "teal", "brown", "pink"];
+    function getColorForZone(index) {
+      return colorPalette[index % colorPalette.length];
+    }
+
+
+    // Setup Heatmap (bubble chart)
+    const ctxHeatmap = document.getElementById('activityHeatmap').getContext('2d');
+    const activityHeatmap = new Chart(ctxHeatmap, {
+      type: 'bubble',
+      data: { datasets: [] },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: {
+            display: true,
+            labels: {
+              generateLabels: () => [
+                { text: 'High Activity (>10)', fillStyle: 'rgba(255, 99, 132, 0.6)' },
+                { text: 'Medium Activity (6–10)', fillStyle: 'rgba(255, 206, 86, 0.6)' },
+                { text: 'Low Activity (1–5)', fillStyle: 'rgba(54, 162, 235, 0.6)' }
+              ]
+            }
+          },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.y} people`
+            }
+          }
+        },
+        scales: {
+          x: {
+            title: { display: true, text: 'Zones (spread for clarity)' },
+            grid: { color: '#e5e7eb' },
+            min: 0,
+            max: 100
+          },
+          y: {
+            title: { display: true, text: 'Live Count' },
+            grid: { color: '#e5e7eb' },
+            min: 0
+          }
+        }
+      }
+    });
+
+
+    // Build heatmap datasets
+    function buildHeatmapData(zoneCounts) {
+      const datasets = [];
+      let zoneIndex = 20;
+      let highAlert = false;
+
+
+      Object.entries(zoneCounts).forEach(([zone, count]) => {
+        let color;
+        if (count > 10) {
+          color = 'rgba(255, 99, 132, 0.6)'; // High activity (>= 15)
+          highAlert = true;
+        } else if (count >= 5) {
+          color = 'rgba(255, 206, 86, 0.6)'; // Medium activity (10 - 14)
+        } else if (count >= 1) {
+          color = 'rgba(54, 162, 235, 0.6)'; // Low activity (1 - 9)
+        } else {
+          color = 'rgba(200, 200, 200, 0.3)'; // No activity (optional)
+        }
+
+
+        datasets.push({
+          label: zone,
+          data: [{ x: zoneIndex, y: count, r: Math.min(count * 2, 20) + 5 }],
+          backgroundColor: color
+        });
+        zoneIndex += 20;
+      });
+
+
+      // Toggle alert banner
+      const alertDiv = document.getElementById('heatmapAlert');
+      if (highAlert) {
+        alertDiv.classList.remove('hidden');
+      } else {
+        alertDiv.classList.add('hidden');
+      }
+
+
+      return datasets;
+    }
+
+
+    // Fetch and load historical counts on page load
+    async function fetchHistoricalCounts() {
+      try {
+        const res = await fetch('/tracking/zone_counts_history?limit=100');
+        const data = await res.json();
+        if (data.status === 'success' && data.history) {
+          zoneChart.data.labels = [];
+          zoneChart.data.datasets = [];
+
+          data.history.forEach(entry => {
+            const timeLabel = new Date(entry.timestamp * 1000).toLocaleTimeString();
+
+            if (!zoneChart.data.labels.includes(timeLabel)) {
+              zoneChart.data.labels.push(timeLabel);
+              if (zoneChart.data.labels.length > 20) zoneChart.data.labels.shift();
+            }
+
+            Object.entries(entry.zone_counts).forEach(([zone, count]) => {
+              let ds = zoneChart.data.datasets.find(d => d.label === zone);
+              if (!ds) {
+                ds = {
+                  label: zone,
+                  data: [],
+                  borderColor: getColorForZone(zoneChart.data.datasets.length),
+                  fill: false
+                };
+                zoneChart.data.datasets.push(ds);
+              }
+              ds.data.push(count);
+              if (ds.data.length > 20) ds.data.shift();
+            });
+          });
+
+          zoneChart.update();
+        }
+      } catch (e) {
+        console.error('Failed to load historical zone counts', e);
+      }
+    }
+
+
+    // Fetch counts + update both charts live
+    async function fetchCounts() {
+      try {
+        const res = await fetch('/tracking/zone_counts');
+        const data = await res.json();
+        if (data.status === 'success') {
+          // Update counts list
+          const countsList = document.getElementById('countsList');
+          countsList.innerHTML = '';
+          Object.entries(data.zone_counts).forEach(([zone, count]) => {
+            const p = document.createElement('p');
+            p.innerHTML = `<span class="font-medium">${zone}</span>: ${count}`;
+            countsList.appendChild(p);
+
+            // Line chart update
+            let dataset = zoneChart.data.datasets.find(ds => ds.label === zone);
+            if (!dataset) {
+              const color = getColorForZone(zoneChart.data.datasets.length);
+              dataset = { label: zone, data: [], borderColor: color, fill: false };
+              zoneChart.data.datasets.push(dataset);
+            }
+
+            const now = new Date().toLocaleTimeString();
+            if (!zoneChart.data.labels.includes(now)) {
+              zoneChart.data.labels.push(now);
+              if (zoneChart.data.labels.length > 20) zoneChart.data.labels.shift();
+            }
+
+            dataset.data.push(count);
+            if (dataset.data.length > 20) dataset.data.shift();
+          });
+
+          zoneChart.update();
+
+          // Heatmap update
+          activityHeatmap.data.datasets = buildHeatmapData(data.zone_counts);
+          activityHeatmap.update();
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+
+    // Keepalive call to keep tracking process active
+    async function sendKeepalive() {
+      try {
+        await fetch('/tracking/keepalive', { method: 'POST' });
+      } catch (e) {
+        console.warn('Keepalive failed', e);
+      }
+    }
+
+    setInterval(sendKeepalive, 5000);
+    sendKeepalive();
+
+    // On page load, fetch historical counts before live updates
+    window.addEventListener('DOMContentLoaded', async () => {
+      await fetchHistoricalCounts();
+      setInterval(fetchCounts, 1000);
+      fetchCounts();
+    });
+  </script>
+
+
+</body>
+</html>
