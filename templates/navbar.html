@@ -9,20 +9,16 @@
     <!-- Menu Links -->
     <div class="hidden md:flex space-x-6 font-medium">
       <a href="{{ url_for('auth.dashboard')}}" class="hover:text-gray-200">Dashboard</a>
-      <a href="#" class="hover:text-gray-200">User Management</a>
+      <a href="{{ url_for('auth.userdata') }}" class="hover:text-gray-200">User Data</a>
       <a href="{{ url_for('zones')}}" class="hover:text-gray-200">Camera Zones</a>
-      <a href="{{ url_for('zone_counts') }}" class="hover:text-gray-200">Zone Counts</a>
       <a href="{{ url_for('tracking_page') }}" class="hover:text-gray-200">Tracking</a>
-      <a href="#" class="hover:text-gray-200">Export data</a>
-      <a href="#" class="hover:text-gray-200">Settings</a>
+      <a href="{{ url_for('zone_counts') }}" class="hover:text-gray-200">Visualization</a>
     </div>
-
-
       <!-- Logout -->
-      <a href="{{ url_for('landing')}}" 
-         class="flex items-center space-x-2 bg-white text-blue-600 px-3 py-1 rounded-lg font-medium">
-        <span>Logout</span>
-      </a>
+    <a href="{{ url_for('auth.logout')}}" 
+       class="flex items-center space-x-2 bg-white text-blue-600 px-3 py-1 rounded-lg font-medium">
+      <span>Logout</span>
+    </a>
     </div>
   </div>
 </nav>

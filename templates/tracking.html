@@ -1,12 +1,13 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
-  <title>Person Tracking</title>
-  <script src="https://kit.fontawesome.com/a2d9d5a52f.js" crossorigin="anonymous"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Person Tracking</title>
+  <script src="https://kit.fontawesome.com/a2d9d5a52f.js" crossorigin="anonymous"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    /* Video container styles */
     #videoContainer {
       position: relative;
       width: 850px;
@@ -16,313 +17,289 @@
       align-items: center;
       justify-content: center;
       overflow: hidden;
+      border-radius: 0.75rem;
     }
+    /* Video & overlay */
     #video, #trackingOverlay {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  user-select: none;
-  pointer-events: none;
-  border-radius: 0.75rem;
-}
-
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      user-select: none;
+      pointer-events: none;
+      border-radius: 0.75rem;
+    }
   </style>
-
 </head>
-<body class="bg-gray-100 p-6">
-  {% include 'navbar.html' %}
+<body class="bg-gray-100 m-0 p-0">
+  {% include 'navbar.html' %}
+  <div class="flex gap-6 justify-center mt-4">
+    <div id="videoContainer">
+      <span id="noVideoText" style="color: #555; font-size: 16px; position: absolute; z-index: 1;">
+        No video or camera selected
+      </span>
+      <video id="video" controls autoplay muted crossorigin="anonymous" style="display:none;"></video>
+      <canvas id="trackingOverlay"></canvas>
+    </div>
+  </div>
+  <div id="toastContainer" class="fixed top-16 right-6 space-y-2 z-50"></div>
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("trackingOverlay");
+    const ctx = canvas.getContext("2d");
+    const noVideoText = document.getElementById("noVideoText");
+    const toastContainer = document.getElementById("toastContainer");
+    let currentStream = null;
 
+    let backendFrameWidth = 640;
+    let backendFrameHeight = 480;
 
-  <div class="flex gap-6 h-full justify-center">
-    <div id="videoContainer">
-      <span id="noVideoText" style="color: #555; font-size: 16px; position: absolute; z-index: 1;">
-        No video or camera selected
-      </span>
-      <video id="video" controls autoplay muted crossorigin="anonymous" style="display:none;"></video>
-      <canvas id="trackingOverlay"></canvas>
-    </div>
-  </div>
+    // Tracking data received from backend for current frame
+    let latestTrackingData = [];
 
+    // Adjust overlay canvas size to match displayed video size
+    function adjustCanvasSize() {
+      const rect = video.getBoundingClientRect();
+      canvas.width = rect.width;
+      canvas.height = rect.height;
+      canvas.style.width = rect.width + "px";
+      canvas.style.height = rect.height + "px";
+    }
 
-  <div id="toastContainer" class="fixed top-16 right-6 space-y-2 z-50"></div>
+    // Calculate scaled drawing rectangle on canvas for video considering letterboxing
+    function getVideoDrawingRect() {
+      const videoRatio = backendFrameWidth / backendFrameHeight;
+      const containerRect = video.getBoundingClientRect();
+      const containerRatio = containerRect.width / containerRect.height;
 
+      let drawWidth, drawHeight, offsetX, offsetY;
+      if (containerRatio > videoRatio) {
+        drawHeight = containerRect.height;
+        drawWidth = drawHeight * videoRatio;
+        offsetX = (containerRect.width - drawWidth) / 2;
+        offsetY = 0;
+      } else {
+        drawWidth = containerRect.width;
+        drawHeight = drawWidth / videoRatio;
+        offsetX = 0;
+        offsetY = (containerRect.height - drawHeight) / 2;
+      }
+      return { drawWidth, drawHeight, offsetX, offsetY };
+    }
 
-  <script>
-    const video = document.getElementById("video");
-    const canvas = document.getElementById("trackingOverlay");
-    const ctx = canvas.getContext("2d");
-    const noVideoText = document.getElementById("noVideoText");
-    const toastContainer = document.getElementById("toastContainer");
-    let currentStream = null;
+    // Setup video and overlay canvas size on metadata load and window resize
+    video.addEventListener("loadedmetadata", () => {
+      noVideoText.style.display = "none";
+      video.style.display = "block";
+      adjustCanvasSize();
+    });
+    window.addEventListener("resize", adjustCanvasSize);
 
-    // Fixed backend frame size for detection coordinates
-    let backendFrameWidth = 640;
-    let backendFrameHeight = 480;
+    // Stop camera stream when needed
+    function stopCameraStream() {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+        currentStream = null;
+      }
+    }
 
-    // Store latest tracking data for smooth drawing
-    let latestTrackingData = [];
+    // Enable or disable camera mode with backend notification and UI setup
+    async function setCameraMode(enable) {
+      stopCameraStream();
+      if (enable) {
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          currentStream = stream;
+          video.srcObject = stream;
+          video.removeAttribute("src");
+          video.play();
+          noVideoText.style.display = "none";
+          video.style.display = "block";
+          localStorage.setItem("cameraActive", "true");
+          localStorage.removeItem("lastVideoUrl");
 
-    function adjustCanvasSize() {
-      const rect = video.getBoundingClientRect();
-      canvas.width = rect.width;
-      canvas.height = rect.height;
-      canvas.style.width = rect.width + "px";
-      canvas.style.height = rect.height + "px";
-    }
+          await fetch("/tracking/set_camera_mode", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ enable_camera: true }),
+          });
 
-    function getVideoDrawingRect() {
-      const videoRatio = backendFrameWidth / backendFrameHeight;
-      const containerRect = video.getBoundingClientRect();
-      const containerRatio = containerRect.width / containerRect.height;
+          startTrackingLoop();
+          startDrawingLoop();
 
-      let drawWidth, drawHeight, offsetX, offsetY;
-      if (containerRatio > videoRatio) {
-        drawHeight = containerRect.height;
-        drawWidth = drawHeight * videoRatio;
-        offsetX = (containerRect.width - drawWidth) / 2;
-        offsetY = 0;
-      } else {
-        drawWidth = containerRect.width;
-        drawHeight = drawWidth / videoRatio;
-        offsetX = 0;
-        offsetY = (containerRect.height - drawHeight) / 2;
-      }
-      return { drawWidth, drawHeight, offsetX, offsetY };
-    }
+          video.onloadedmetadata = () => { adjustCanvasSize(); };
+          showToast("Camera Activated");
+        } catch (err) {
+          console.error(err);
+          alert("Unable to access camera: " + err.message);
+          localStorage.removeItem("cameraActive");
+          noVideoText.style.display = "block";
+          video.style.display = "none";
+        }
+      } else {
+        localStorage.removeItem("cameraActive");
+        await fetch("/tracking/set_camera_mode", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enable_camera: false }),
+        });
+        stopTrackingLoop();
+        stopDrawingLoop();
+      }
+    }
 
-    video.addEventListener("loadedmetadata", () => {
-      noVideoText.style.display = "none";
-      video.style.display = "block";
-      adjustCanvasSize();
-    });
+    // On page load, restore video source or camera mode as needed
+    window.addEventListener("DOMContentLoaded", async () => {
+      const lastVideo = localStorage.getItem("lastVideoUrl");
+      const cameraActive = localStorage.getItem("cameraActive");
 
-    window.addEventListener("resize", adjustCanvasSize);
+      if (lastVideo) {
+        stopCameraStream();
+        video.srcObject = null;
+        video.src = lastVideo;
+        video.style.display = "block";
+        noVideoText.style.display = "none";
 
-    function stopCameraStream() {
-      if (currentStream) {
-        currentStream.getTracks().forEach((track) => track.stop());
-        currentStream = null;
-      }
-    }
+        try {
+          const res = await fetch("/tracking/set_video_path", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ video_path: lastVideo }),
+          });
+          const data = await res.json();
+          if (data.status === "success") {
+            startTrackingLoop();
+            startDrawingLoop();
+          } else {
+            showToast("Backend video update failed: " + data.message, "error");
+          }
+        } catch (e) {
+          showToast("Failed to update backend video: " + e.message, "error");
+        }
+      } else if (cameraActive === "true") {
+        setCameraMode(true);
+      } else {
+        noVideoText.style.display = "block";
+        video.style.display = "none";
+      }
+    });
 
-    async function setCameraMode(enable) {
-      stopCameraStream();
-      if (enable) {
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: false,
-          });
-          currentStream = stream;
-          video.srcObject = stream;
-          video.removeAttribute("src");
-          video.play();
-          noVideoText.style.display = "none";
-          video.style.display = "block";
-          localStorage.setItem("cameraActive", "true");
-          localStorage.removeItem("lastVideoUrl");
+    // Show toast notifications
+    function showToast(message, type = "success") {
+      const toast = document.createElement("div");
+      const bgColor = type === "error" ? "bg-red-600" : "bg-green-600";
+      toast.className = `px-4 py-2 rounded-lg shadow text-white ${bgColor} transition-all duration-500`;
+      toast.innerText = message;
+      toastContainer.appendChild(toast);
+      setTimeout(() => {
+        toast.classList.add("opacity-0");
+        setTimeout(() => toast.remove(), 500);
+      }, 3000);
+    }
 
-          await fetch("/tracking/set_camera_mode", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ enable_camera: true }),
-          });
+    let trackingInterval = null;
+    let drawingActive = false;
 
-          startTrackingLoop();
-          startDrawingLoop();
+    // Fetch latest tracking data from backend update endpoint
+    async function updateTracking() {
+      try {
+        const response = await fetch("/tracking/update", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (response.status === 429) {
+          stopTrackingLoop();
+          showToast("Server busy, backing off...", "error");
+          setTimeout(() => {
+            showToast("Resuming tracking", "success");
+            startTrackingLoop();
+          }, 1000);
+          return;
+        }
+        const data = await response.json();
+        if (data.status === "success") {
+          backendFrameWidth = data.frame_width || backendFrameWidth;
+          backendFrameHeight = data.frame_height || backendFrameHeight;
+          latestTrackingData = data.tracks || [];
+        }
+      } catch (error) {
+        console.error("Error updating tracking:", error);
+      }
+    }
 
-          video.onloadedmetadata = () => {
-            adjustCanvasSize();
-          };
-          showToast("Camera Activated");
-        } catch (err) {
-          console.error(err);
-          alert("Unable to access camera: " + err.message);
-          localStorage.removeItem("cameraActive");
-          noVideoText.style.display = "block";
-          video.style.display = "none";
-        }
-      } else {
-        localStorage.removeItem("cameraActive");
-        await fetch("/tracking/set_camera_mode", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ enable_camera: false }),
-        });
-        stopTrackingLoop();
-        stopDrawingLoop();
-      }
-    }
+    // Draw bounding boxes and IDs on canvas, scaled to video display
+    function drawLoop() {
+      if (!drawingActive) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+      const { drawWidth, drawHeight, offsetX, offsetY } = getVideoDrawingRect();
 
-    window.addEventListener("DOMContentLoaded", async () => {
-      const lastVideo = localStorage.getItem("lastVideoUrl");
-      const cameraActive = localStorage.getItem("cameraActive");
+      // Draw every bounding box in latestTrackingData
+      latestTrackingData.forEach(track => {
+        const { track_id, bbox } = track;
+        const [x1, y1, x2, y2] = bbox;
 
-      if (lastVideo) {
-        stopCameraStream();
-        video.srcObject = null;
-        video.src = lastVideo;
-        video.style.display = "block";
-        noVideoText.style.display = "none";
+        const sx1 = offsetX + (x1 / backendFrameWidth) * drawWidth;
+        const sy1 = offsetY + (y1 / backendFrameHeight) * drawHeight;
+        const sx2 = offsetX + (x2 / backendFrameWidth) * drawWidth;
+        const sy2 = offsetY + (y2 / backendFrameHeight) * drawHeight;
 
-        try {
-          const res = await fetch("/tracking/set_video_path", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ video_path: lastVideo }),
-          });
-          const data = await res.json();
-          if (data.status === "success") {
-            startTrackingLoop();
-            startDrawingLoop();
-          } else {
-            showToast("Backend video update failed: " + data.message, "error");
-          }
-        } catch (e) {
-          showToast("Failed to update backend video: " + e.message, "error");
-        }
-      } else if (cameraActive === "true") {
-        setCameraMode(true);
-      } else {
-        noVideoText.style.display = "block";
-        video.style.display = "none";
-      }
-    });
+        const width = sx2 - sx1;
+        const height = sy2 - sy1;
 
-    function showToast(message, type = "success") {
-      const toast = document.createElement("div");
-      const bgColor = type === "error" ? "bg-red-600" : "bg-green-600";
-      toast.className = `px-4 py-2 rounded-lg shadow text-white ${bgColor} transition-all duration-500`;
-      toast.innerText = message;
-      toastContainer.appendChild(toast);
-      setTimeout(() => {
-        toast.classList.add("opacity-0");
-        setTimeout(() => toast.remove(), 500);
-      }, 3000);
-    }
+        ctx.strokeStyle = "#10B981";
+        ctx.lineWidth = 2;
+        ctx.strokeRect(sx1, sy1, width, height);
 
-    let trackingInterval = null;
-    let drawingActive = false;
+        const text = `ID ${track_id}`;
+        ctx.font = "14px sans-serif";
+        const padding = 4;
+        const textWidth = ctx.measureText(text).width;
+        const textHeight = 16;
+        ctx.fillStyle = "rgba(16, 185, 129, 0.8)";
+        ctx.fillRect(sx1, sy1 - textHeight - 4, textWidth + padding * 2, textHeight);
+        ctx.fillStyle = "white";
+        ctx.fillText(text, sx1 + padding, sy1 - 4);
+      });
 
-    function startTrackingLoop() {
-      if (trackingInterval) return;
-      trackingInterval = setInterval(updateTracking, 30);
-    }
+      requestAnimationFrame(drawLoop);
+    }
 
-    function stopTrackingLoop() {
-      if (trackingInterval) {
-        clearInterval(trackingInterval);
-        trackingInterval = null;
-      }
-    }
+    // Start periodic backend data fetching at roughly 40ms interval
+    function startTrackingLoop() {
+      if (trackingInterval) return;
+      trackingInterval = setInterval(updateTracking, 40);
+    }
 
-    async function updateTracking() {
-      try {
-        const response = await fetch("/tracking/update", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-        if (response.status === 429) {
-          stopTrackingLoop();
-          showToast("Server busy, backing off...", "error");
-          setTimeout(() => {
-            showToast("Resuming tracking", "success");
-            startTrackingLoop();
-          }, 1000);
-          return;
-        }
-        const data = await response.json();
-        if (data.status === "success") {
-          backendFrameWidth = data.frame_width || backendFrameWidth;
-          backendFrameHeight = data.frame_height || backendFrameHeight;
-          // Update latest tracking data but do not draw directly here
-          latestTrackingData = data.tracks || [];
-        }
-      } catch (error) {
-        console.error("Error updating tracking:", error);
-      }
-    }
+    // Stop backend polling
+    function stopTrackingLoop() {
+      if (trackingInterval) {
+        clearInterval(trackingInterval);
+        trackingInterval = null;
+      }
+    }
 
-    // Draw loop for smooth overlay updates synced with video frames
-    function drawLoop() {
-      if (!drawingActive) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      const { drawWidth, drawHeight, offsetX, offsetY } = getVideoDrawingRect();
+    // Start the drawing requestAnimationFrame loop
+    function startDrawingLoop() {
+      if (!drawingActive) {
+        drawingActive = true;
+        requestAnimationFrame(drawLoop);
+      }
+    }
 
-      const scaleX = drawWidth / backendFrameWidth;
-      const scaleY = drawHeight / backendFrameHeight;
+    // Stop drawing loop
+    function stopDrawingLoop() {
+      drawingActive = false;
+    }
 
-      latestTrackingData.forEach((track) => {
-        const { track_id, bbox, class_name, confidence } = track;
-        const [x1, y1, x2, y2] = bbox;
-
-        const scaledX1 = offsetX + x1 * scaleX;
-        const scaledY1 = offsetY + y1 * scaleY;
-        const scaledWidth = (x2 - x1) * scaleX;
-        const scaledHeight = (y2 - y1) * scaleY;
-
-        ctx.strokeStyle = "#10B981";
-        ctx.lineWidth = 2;
-        ctx.strokeRect(scaledX1, scaledY1, scaledWidth, scaledHeight);
-
-        const labelText = `ID ${track_id} (${class_name})`;
-        ctx.font = "14px sans-serif";
-        ctx.textBaseline = "middle";
-        const textWidth = ctx.measureText(labelText).width;
-        const paddingX = 8;
-        const rectW = textWidth + paddingX * 2;
-        const rectH = 20;
-        const labelX = scaledX1;
-        const labelY = scaledY1 - rectH - 2;
-        ctx.fillStyle = "rgba(16, 185, 129, 0.9)";
-        ctx.fillRect(labelX, labelY, rectW, rectH);
-
-        ctx.fillStyle = "white";
-        ctx.fillText(labelText, labelX + paddingX, labelY + rectH / 2);
-
-        if (confidence) {
-          const confText = `${(confidence * 100).toFixed(1)}%`;
-          ctx.font = "10px sans-serif";
-          const confWidth = ctx.measureText(confText).width;
-          ctx.fillStyle = "rgba(16, 185, 129, 0.8)";
-          ctx.fillRect(
-            scaledX1 + scaledWidth - confWidth - paddingX,
-            scaledY1,
-            confWidth + paddingX,
-            16
-          );
-          ctx.fillStyle = "white";
-          ctx.fillText(
-            confText,
-            scaledX1 + scaledWidth - confWidth - paddingX / 2,
-            scaledY1 + 8
-          );
-        }
-      });
-
-      requestAnimationFrame(drawLoop);
-    }
-
-    function startDrawingLoop() {
-      if (!drawingActive) {
-        drawingActive = true;
-        requestAnimationFrame(drawLoop);
-      }
-    }
-
-    function stopDrawingLoop() {
-      drawingActive = false;
-    }
-
-    window.addEventListener("beforeunload", () => {
-      stopTrackingLoop();
-      stopDrawingLoop();
-      stopCameraStream();
-    });
-  </script>
+    // On page close, stop everything
+    window.addEventListener("beforeunload", () => {
+      stopTrackingLoop();
+      stopDrawingLoop();
+      stopCameraStream();
+    });
+  </script>
 </body>
 </html>

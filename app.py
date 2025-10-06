@@ -1,8 +1,8 @@
 # app.py
 from flask import Flask, render_template, request
-from routes.auth import auth_bp
+from routes.auth import auth_bp, token_required
 from routes.zones import zones_bp
-from routes.tracking import tracking_bp   # <-- new tracking blueprint
+from routes.tracking import tracking_bp
 
 import os
 from werkzeug.utils import secure_filename
@@ -25,16 +25,19 @@ def landing():
     return render_template("landing.html")
 
 @app.route("/zones")
-def zones():
+@token_required
+def zones(current_user):
     tab = request.args.get("tab", "draw")  # default = draw
     return render_template("zones.html", tab=tab)
 
 @app.route("/zone_counts")
-def zone_counts():
+@token_required
+def zone_counts(current_user):
     return render_template("zone_counts.html")
 
 @app.route("/tracking_page")
-def tracking_page():
+@token_required
+def tracking_page(current_user):
     """
     Page for live tracking results
     """

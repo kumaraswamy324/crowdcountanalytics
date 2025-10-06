@@ -3,17 +3,71 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Zone Editor</title>
+  <title>Dashboard</title>
+
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- FontAwesome -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- Custom CSS for background image -->
+  <style>
+    .dashboard-bg {
+      background-image: url("{{ url_for('static', filename='images/dashboardimage.jpg') }}");
+      background-size: cover;
+      background-position: center;
+      min-height: 100vh;
+    }
+  </style>
 </head>
-<body class="bg-gray-50">
+<body class="dashboard-bg relative">
 
-  <!-- Navbar (disabled for now) -->
-   {% include 'navbar.html' %}
+  <!-- Page content -->
+  <div class="relative z-10">
 
-   <h1 class="text-3xl font-bold text-center my-6">Welcome to Dashboard</h1>
+      <!-- Navbar -->
+      {% include 'navbar.html' %}
+
+      <!-- Welcome section -->
+      <div class="flex flex-col items-center justify-center mt-24 text-center px-4">
+          <h1 class="text-5xl md:text-6xl font-extrabold text-black drop-shadow-lg mb-4">
+              Welcome, {{ username }}!
+          </h1>
+          <p class="text-xl md:text-2xl text-black drop-shadow-md">
+              Manage your cameras, zones, and analytics efficiently from here.
+          </p>
+      </div>
+
+      <!-- Suggestions Section as a single white box -->
+      <div class="max-w-6xl mx-auto mt-16 px-6">
+          <div class="bg-white rounded-xl shadow-2xl p-8 hover:shadow-3xl transition duration-300">
+              <h2 class="text-3xl font-bold mb-6 text-gray-800 text-center border-b-4 border-blue-600 pb-2">
+                  Suggestions for Better Analytics
+              </h2>
+              <ul class="space-y-4 text-gray-700 text-lg">
+                  <li>
+                      <strong>• Use High-Quality Videos:</strong> For better tracking and analytics accuracy, always use high-resolution camera feeds.
+                  </li>
+                  <li>
+                      <strong>• Check Camera Angles:</strong> Ensure your cameras cover the zones completely to avoid blind spots.
+                  </li>
+                  <li>
+                      <strong>• Regularly Update Zones:</strong> Adjust your camera zones as the environment changes for accurate analytics.
+                  </li>
+                  <li>
+                      <strong>• Monitor Real-Time Alerts:</strong> Keep an eye on live tracking to quickly respond to unusual crowd behavior.
+                  </li>
+                  <li>
+                      <strong>• Use Stable Internet:</strong> Ensure uninterrupted camera streaming for consistent analytics.
+                  </li>
+                  <li>
+                      <strong>• Maintain Cameras:</strong> Regular cleaning and checks improve video quality and reduce errors.
+                  </li>
+              </ul>
+          </div>
+      </div>
+
+  </div>
+
 </body>
 </html>
