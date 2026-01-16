@@ -1,9 +1,8 @@
-import mysql.connector
+import sqlite3
+
+DB_NAME = "database.db"
 
 def get_db_connection():
-    return mysql.connector.connect(
-        host="localhost",
-        user="root",
-        password="Sanjusql#324",
-        database="crowdcount_auth",
-    )
+    conn = sqlite3.connect(DB_NAME)
+    conn.row_factory = sqlite3.Row
+    return conn

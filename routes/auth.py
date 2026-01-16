@@ -6,7 +6,7 @@ import datetime
 from functools import wraps
 
 auth_bp = Blueprint("auth", __name__)
-SECRET_KEY = "your_jwt_secret_here"  # change this to a secure, random key
+SECRET_KEY = "your_jwt_secret_here"  # change later in production
 
 
 # ---------------- JWT Token Decorator ----------------
@@ -20,7 +20,7 @@ def token_required(f):
 
         try:
             data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-            current_user = data.get("username")  # fetch username from token
+            current_user = data.get("username")
         except jwt.ExpiredSignatureError:
             flash("Session expired. Please login again.", "error")
             return redirect(url_for("auth.login"))
@@ -46,44 +46,38 @@ def register():
         place = request.form["place"]
         dob = request.form["dob"]
 
-        # Password confirmation check
         if password != confirm_password:
             flash("Passwords do not match!", "error")
             return redirect(url_for("auth.register"))
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
 
-        # Check if user exists
         cursor.execute(
-            "SELECT * FROM users WHERE username=%s OR email=%s", (username, email)
+            "SELECT * FROM users WHERE username=? OR email=?",
+            (username, email)
         )
         existing_user = cursor.fetchone()
 
         if existing_user:
             flash("User already exists!", "error")
-            cursor.close()
             conn.close()
             return redirect(url_for("auth.register"))
 
-        # Hash password and insert
         hashed_password = generate_password_hash(password)
-        cursor.execute(
-            """
+
+        cursor.execute("""
             INSERT INTO users (first_name, last_name, username, email, password, place, dob)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
-            """,
-            (first_name, last_name, username, email, hashed_password, place, dob),
-        )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (first_name, last_name, username, email, hashed_password, place, dob))
+
         conn.commit()
-        cursor.close()
         conn.close()
 
         flash("Registration successful! Please login.", "success")
         return redirect(url_for("auth.login"))
 
     return render_template("register.html")
-
 
 
 # ---------------- Login ----------------
@@ -94,20 +88,22 @@ def login():
         password = request.form["password"]
 
         conn = get_db_connection()
-        cursor = conn.cursor(dictionary=True)
+        cursor = conn.cursor()
 
         cursor.execute(
-            "SELECT * FROM users WHERE username=%s OR email=%s", (login_id, login_id)
+            "SELECT * FROM users WHERE username=? OR email=?",
+            (login_id, login_id)
         )
         user = cursor.fetchone()
-        cursor.close()
         conn.close()
+
+        if user:
+            user = dict(user)
 
         if not user or not check_password_hash(user["password"], password):
             flash("Invalid username/email or password!", "error")
             return redirect(url_for("auth.login"))
 
-        # Create JWT including username
         token = jwt.encode(
             {
                 "username": user["username"],
@@ -141,18 +137,23 @@ def logout():
     flash("Logged out successfully.", "success")
     return resp
 
+
 # ---------------- User Data Page ----------------
 @auth_bp.route("/userdata")
 @token_required
 def userdata(current_user):
     conn = get_db_connection()
-    cursor = conn.cursor(dictionary=True)
+    cursor = conn.cursor()
 
-    cursor.execute("SELECT first_name, last_name, username, email, place, dob FROM users WHERE username=%s", (current_user,))
+    cursor.execute(
+        "SELECT first_name, last_name, username, email, place, dob FROM users WHERE username=?",
+        (current_user,)
+    )
     user = cursor.fetchone()
-
-    cursor.close()
     conn.close()
+
+    if user:
+        user = dict(user)
 
     if not user:
         flash("User not found!", "error")
